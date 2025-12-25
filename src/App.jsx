@@ -1,16 +1,16 @@
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { STLExporter } from 'three/examples/jsm/exporters/STLExporter'
 
-function Cylinder({ radius, height, segments }) {
-  // Generate cylinder mesh based on parameters
+function Cylinder({ radius, height, segments, meshRef }) {
   const geometry = useMemo(() => {
     return new THREE.CylinderGeometry(radius, radius, height, segments)
   }, [radius, height, segments])
 
   return (
-    <mesh geometry={geometry}>
+    <mesh ref={meshRef} geometry={geometry}>
       <meshStandardMaterial color="#3b82f6" />
     </mesh>
   )
@@ -20,6 +20,58 @@ function App() {
   const [radius, setRadius] = useState(1)
   const [height, setHeight] = useState(2)
   const [segments, setSegments] = useState(32)
+  const [isExporting, setIsExporting] = useState(false)
+  const [scale, setScale] = useState(10) // Export scale multiplier
+  
+  // Create ref to pass to Cylinder
+  const meshRef = useRef()
+
+  // STL Export Function
+  const exportSTL = () => {
+    setIsExporting(true)
+    
+    try {
+      const mesh = meshRef.current
+      
+      if (!mesh) {
+        alert('Mesh not ready yet. Please wait a moment and try again.')
+        setIsExporting(false)
+        return
+      }
+
+      // Clone the mesh so we don't affect the display
+      const exportMesh = mesh.clone()
+      
+      // Scale up for 3D printing (convert to mm)
+      exportMesh.scale.set(scale, scale, scale)
+      exportMesh.updateMatrix()
+      exportMesh.geometry.applyMatrix4(exportMesh.matrix)
+
+      // Create STL exporter
+      const exporter = new STLExporter()
+      
+      // Export as binary STL (smaller file size)
+      const stlBinary = exporter.parse(exportMesh, { binary: true })
+      
+      // Create blob and download
+      const blob = new Blob([stlBinary], { type: 'application/octet-stream' })
+      const link = document.createElement('a')
+      link.href = URL.createObjectURL(blob)
+      link.download = `cylinder_${radius*scale}mm_x_${height*scale}mm.stl`
+      link.click()
+      
+      // Cleanup
+      URL.revokeObjectURL(link.href)
+      setIsExporting(false)
+      
+      console.log(`✅ Exported: Radius ${radius*scale}mm, Height ${height*scale}mm`)
+      
+    } catch (error) {
+      console.error('Export failed:', error)
+      alert('Export failed! Check console for details.')
+      setIsExporting(false)
+    }
+  }
 
   return (
     <div style={{ width: '100vw', height: '100vh', background: '#1a1a1a' }}>
@@ -28,7 +80,7 @@ function App() {
         <ambientLight intensity={0.5} />
         <pointLight position={[10, 10, 10]} intensity={1} />
         <pointLight position={[-10, -10, -10]} intensity={0.5} />
-        <Cylinder radius={radius} height={height} segments={segments} />
+        <Cylinder radius={radius} height={height} segments={segments} meshRef={meshRef} />
         <OrbitControls />
         <gridHelper args={[10, 10]} />
       </Canvas>
@@ -52,7 +104,7 @@ function App() {
         {/* Radius Slider */}
         <div style={{ marginBottom: '20px' }}>
           <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
-            Radius: {radius.toFixed(2)} units
+            Radius: {radius.toFixed(2)} units ({(radius * scale).toFixed(1)}mm)
           </label>
           <input
             type="range"
@@ -68,7 +120,7 @@ function App() {
         {/* Height Slider */}
         <div style={{ marginBottom: '20px' }}>
           <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
-            Height: {height.toFixed(2)} units
+            Height: {height.toFixed(2)} units ({(height * scale).toFixed(1)}mm)
           </label>
           <input
             type="range"
@@ -100,6 +152,57 @@ function App() {
           </small>
         </div>
 
+        {/* Scale Selector */}
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
+            Export Scale: 1 unit = {scale}mm
+          </label>
+          <select 
+            value={scale} 
+            onChange={(e) => setScale(parseInt(e.target.value))}
+            style={{
+              width: '100%',
+              padding: '8px',
+              borderRadius: '6px',
+              border: '1px solid #d1d5db',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="1">1mm (tiny)</option>
+            <option value="10">10mm (small)</option>
+            <option value="100">100mm (large)</option>
+          </select>
+          <small style={{ color: '#666', fontSize: '12px' }}>
+            Adjust if parts are too big/small in slicer
+          </small>
+        </div>
+
+        {/* Export Button */}
+        <button
+          onClick={exportSTL}
+          disabled={isExporting}
+          style={{
+            width: '100%',
+            padding: '12px',
+            background: isExporting ? '#94a3b8' : '#10b981',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            fontSize: '16px',
+            fontWeight: '600',
+            cursor: isExporting ? 'not-allowed' : 'pointer',
+            transition: 'background 0.2s'
+          }}
+          onMouseEnter={(e) => {
+            if (!isExporting) e.target.style.background = '#059669'
+          }}
+          onMouseLeave={(e) => {
+            if (!isExporting) e.target.style.background = '#10b981'
+          }}
+        >
+          {isExporting ? '⏳ Exporting...' : '🖨️ Download STL'}
+        </button>
+
         {/* Info */}
         <div style={{
           marginTop: '20px',
@@ -124,11 +227,20 @@ function App() {
         fontFamily: 'system-ui',
         fontSize: '13px'
       }}>
-        <div style={{ marginBottom: '8px' }}>
-          <strong>Volume:</strong> {(Math.PI * radius * radius * height).toFixed(2)} units³
+        <div style={{ marginBottom: '8px', fontWeight: '600', borderBottom: '1px solid #e5e7eb', paddingBottom: '8px' }}>
+          📐 Dimensions (for 3D printing)
         </div>
-        <div>
-          <strong>Surface Area:</strong> {(2 * Math.PI * radius * (radius + height)).toFixed(2)} units²
+        <div style={{ marginBottom: '6px' }}>
+          <strong>Diameter:</strong> {(radius * 2 * scale).toFixed(1)}mm
+        </div>
+        <div style={{ marginBottom: '6px' }}>
+          <strong>Height:</strong> {(height * scale).toFixed(1)}mm
+        </div>
+        <div style={{ marginBottom: '8px' }}>
+          <strong>Volume:</strong> {(Math.PI * radius * radius * height * scale * scale * scale / 1000).toFixed(2)} cm³
+        </div>
+        <div style={{ fontSize: '11px', color: '#6b7280', paddingTop: '8px', borderTop: '1px solid #e5e7eb' }}>
+          <strong>Filament estimate:</strong> ~{(Math.PI * radius * radius * height * scale * scale * scale / 1000 * 1.2).toFixed(2)}g
         </div>
       </div>
     </div>

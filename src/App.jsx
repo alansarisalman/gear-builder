@@ -95,10 +95,11 @@ function App() {
         borderRadius: '12px',
         minWidth: '280px',
         boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-        fontFamily: 'system-ui, -apple-system, sans-serif'
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        color: '#000'
       }}>
         <h2 style={{ margin: '0 0 20px 0', fontSize: '20px', fontWeight: '600' }}>
-          🔧 Parametric Cylinder
+          🔧 Firnas
         </h2>
 
         {/* Radius Slider */}
@@ -225,7 +226,8 @@ function App() {
         padding: '15px',
         borderRadius: '8px',
         fontFamily: 'system-ui',
-        fontSize: '13px'
+        fontSize: '13px',
+        color: '#000'
       }}>
         <div style={{ marginBottom: '8px', fontWeight: '600', borderBottom: '1px solid #e5e7eb', paddingBottom: '8px' }}>
           📐 Dimensions (for 3D printing)
